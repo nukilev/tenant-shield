@@ -1,1 +1,2 @@
-print("Tenant Shield Initialized")
+with open("contract_sample.txt", "r", encoding="utf-8") as f:
+    print(f.read())
