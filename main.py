@@ -1,5 +1,6 @@
 import time
 import json
+import streamlit as str_ui
 from dotenv import load_dotenv
 from src.services.pdf_service import read_pdf_contract
 from src.services.chunking_service import split_contract_into_chunks
@@ -7,37 +8,66 @@ from src.services.ai_service import analyze_contract_text
 
 load_dotenv()
 
-def main():
-    pdf_filename = "sample_contract.pdf"
-    print(f"Starting Tenant Shield on: {pdf_filename}...")
+str_ui.set_page_config(page_title="Tenant Shield - מגן השוכר", layout="centered")
 
-    try:
-        # 1. קריאת ה-PDF באמצעות השירות הייעודי
-        contract_text = read_pdf_contract(pdf_filename)
-        print(f"Successfully extracted {len(contract_text)} characters.")
+str_ui.markdown(
+    """
+    <style>
+    .stApp { direction: RTL; text-align: right; }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-        chunks = split_contract_into_chunks(contract_text)
-        print(f"Contract split into {len(chunks)} individual logical clauses.")
+str_ui.title("🛡️ Tenant Shield - מגן השוכר")
+str_ui.subheader("ניתוח חוזי שכירות מבוסס AI בזמן אמת")
+str_ui.write("העלה את קובץ ה-PDF של חוזה השכירות שלך, והמערכת תציף סיכונים ותציע ניסוחים חלופיים.")
 
-        print("\n--- Starting Clause-by-Clause Analysis (Testing first 3 chunks) ---")
+uploaded_file = str_ui.file_uploader("בחר קובץ חוזה שכירות (PDF)", type=["pdf"])
 
-        for i, chunk in enumerate(chunks[:3], start=1):
-            print(f"\n[Analyzing Clause {i}/{min(3, len(chunks))}]")
-            print(f"Original Text Snippet: {chunk[:60]}...")
+if uploaded_file is not None:
+    # שמירה זמנית של הקובץ המועלה כדי שספריית ה-PDF תוכל לקרוא אותו
+    temp_filename = "temp_uploaded_contract.pdf"
+    with open(temp_filename, "wb") as f:
+        f.write(uploaded_file.getbuffer())
 
-            # שליחה ל-AI
-            analysis_result_string = analyze_contract_text(chunk)
-            analysis_json = json.loads(analysis_result_string)
+    str_ui.success("📊 הקובץ הועלה בהצלחה! מוכן לניתוח.")
 
-            # הדפסת התוצאה בצורה יפה
-            print(f"Result Risk Level: {analysis_json.get('risk_level').upper()}")
-            print(json.dumps(analysis_json, indent=4, ensure_ascii=False))
+    # כפתור להרצת הניתוח
+    if str_ui.button("התחל ניתוח חוזה"):
+        with str_ui.spinner("מחלץ טקסט ומנתח סעיפים מול Gemini API..."):
+            try:
+                # א. חילוץ ופיצול
+                full_text = read_pdf_contract(temp_filename)
+                chunks = split_contract_into_chunks(full_text)
 
-            # השהייה קלה של שנייה בין בקשות כדי לא לחרוג ממכסות ה-Rate Limit של המסלול החינמי
-            time.sleep(1)
+                str_ui.info(f"החוזה פוצל בהצלחה ל-{len(chunks)} סעיפים לוגיים. מציג את הסעיפים הראשונים:")
 
-    except Exception as e:
-        print(f"An error occurred during execution: {e}")
+                # ב. לולאת ניתוח והצגה בממשק (כרגע מוגבל ל-3 הראשונים לצורך בדיקה מהירה)
+                for i, chunk in enumerate(chunks[:3], start=1):
+                    str_ui.markdown(f"### סעיף {i}")
 
-if __name__ == "__main__":
-    main()
+                    analysis_result_string = analyze_contract_text(chunk)
+                    analysis_json = json.loads(analysis_result_string)
+
+                    risk = analysis_json.get('risk_level', 'green').lower()
+                    explanation = analysis_json.get('explanation', '')
+                    alternative = analysis_json.get('alternative_text', '')
+
+                    if risk == 'red':
+                        str_ui.error(f"🚨 **רמת סיכון: אדום (סעיף דרקוני/בעייתי)**\n\n**הסבר:** {explanation}")
+                    elif risk == 'yellow':
+                        str_ui.warning(f"⚠️ **רמת סיכון: צהוב (דורש תשומת לב)**\n\n**הסבר:** {explanation}")
+                    else:
+                        str_ui.success(f"✅ **רמת סיכון: ירוק (תקין ומאוזן)**\n\n**הסבר:** {explanation}")
+
+                    if alternative:
+                        str_ui.markdown("**הצעה לנוסח חלופי ומאוזן:**")
+                        str_ui.code(alternative, language="text")
+
+                    str_ui.markdown("---")
+
+                str_ui.balloons()
+
+            except Exception as e:
+                str_ui.error(f"התרחשה שגיאה במהלך הניתוח: {e}")
