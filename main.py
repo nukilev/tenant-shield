@@ -1,10 +1,11 @@
 import time
 import json
+import asyncio
 import streamlit as str_ui
 from dotenv import load_dotenv
 from src.services.pdf_service import read_pdf_contract
 from src.services.chunking_service import split_contract_into_chunks
-from src.services.ai_service import analyze_full_contract
+from src.services.ai_service import analyze_all_chunks_parallel
 
 load_dotenv()
 
@@ -39,30 +40,32 @@ if uploaded_file is not None:
             try:
                 # א. חילוץ ופיצול
                 full_text = read_pdf_contract(temp_filename)
+                chunks = split_contract_into_chunks(full_text)
 
-                report_string = analyze_full_contract(full_text)
-                report_json = json.loads(report_string)
+                parallel_results = asyncio.run(analyze_all_chunks_parallel(chunks))
 
-                clauses = report_json.get("analyzed_clauses", [])
-
-                str_ui.info(f"🔮 הניתוח הושלם! נמצאו {len(clauses)} סעיפים מהותיים לבדיקה:")
                 str_ui.markdown("---")
 
-                for i, clause in enumerate(clauses, start=1):
-                    with str_ui.container():
-                        title = clause.get("clause_title", f"סעיף {i}")
-                        str_ui.markdown(f"### 📍 {title}")
+                for i, result in enumerate(parallel_results, start=1):
+                    if "error" in result:
+                        str_ui.error(f"שגיאה בניתוח סעיף {i}: {result['error']}")
+                        continue
 
-                        risk = clause.get("risk_level", "green").lower()
-                        explanation = clause.get("explanation", "")
-                        original = clause.get("original_text", "")
-                        alternative = clause.get("alternative_text", "")
+                    original_text = result["original_text"]
+                    analysis_json = json.loads(result["analysis"])
+
+                    with str_ui.container():
+                        str_ui.markdown(f"### 📍 סעיף {i}")
+
+                        risk = analysis_json.get('risk_level', 'green').lower()
+                        explanation = analysis_json.get('explanation', '')
+                        alternative = analysis_json.get('alternative_text', '')
 
                         col_original, col_analysis = str_ui.columns([1, 1.2], gap="large")
 
                         with col_original:
                             str_ui.markdown("**📄 מתוך החוזה:**")
-                            str_ui.info(original)
+                            str_ui.info(original_text)
 
                         with col_analysis:
                             str_ui.markdown("**🔍 ניתוח משפטי:**")

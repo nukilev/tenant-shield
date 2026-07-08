@@ -1,46 +1,47 @@
+import asyncio
 from google import genai
 from google.genai import types
-from src.models.analysis import ContractReport
+from src.models.analysis import ClauseAnalysis
 from google.genai.errors import APIError
 
-def analyze_full_contract(contract_text: str) -> str:
-    client = genai.Client()
-
+async def analyze_single_chunk_async(client: genai.Client, chunk_text: str) -> dict:
     system_instruction = (
-        "אתה עורך דין מומחה לדיני שכירות ומקרקעין בישראל. תפקידך לסרוק חוזה שכירות שלם, "
-        "לזהות את כל הסעיפים המהותיים (במיוחד הבעייתיים או החד-צדדיים), ולנתח אותם עבור השוכר "
-        "ביחס לחוק שכירות הוגנת ולסטנדרט המקובל בשוק. עליך להחזיר רשימה מפורטת של הסעיפים הללו."
+        "אתה עורך דין מומחה לדיני שכירות ומקרקעין בישראל. תפקידך לנתח סעיף מחוזה שכירות "
+        "ולהציף סיכונים עבור השוכר, תוך השוואה לחוק שכירות הוגנת ולסטנדרט המקובל בשוק."
     )
 
     config = types.GenerateContentConfig(
         system_instruction=system_instruction,
         response_mime_type="application/json",
-        response_schema=ContractReport,  # שימוש ב-Schema של הדוח המלא
-        temperature=0.1,  # טמפרטורה נמוכה לעקביות מירבית
-    )
-
-    prompt = (
-        f"אנא סרוק את חוזה השכירות הבא מתחילתו ועד סופו.חלץ ממנו את הסעיפים החשובים ביותר, "
-        f"ונתח כל אחד מהם לפי רמת סיכון (red/yellow/green):\n\n{contract_text}"
+        response_schema=ClauseAnalysis,
+        temperature=0.2,
     )
 
     try:
-        print("[AI] Analyzing full contract with Gemini 1.5 Pro (Single Shot)...")
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model='gemini-2.5-flash',
-            contents=prompt,
+            contents=f"נתח בצורה מעמיקה את הסעיף הבא מהחוזה:\n\n{chunk_text}",
             config=config,
         )
-        return response.text
+        return {"original_text": chunk_text, "analysis": response.text}
 
     except APIError as e:
         if e.code == 503:
-            print("[AI] ⚠️ Gemini 1.5 Pro is busy. Switching to Gemini 1.5 Flash for full contract...")
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model='gemini-1.5-flash',
-                contents=prompt,
+                contents=f"נתח בצורה מעמיקה את הסעיף הבא מהחוזה:\n\n{chunk_text}",
                 config=config,
             )
-            return response.text
+            return {"original_text": chunk_text, "analysis": response.text}
         else:
-            raise e
+            return {"original_text": chunk_text, "error": str(e)}
+
+async def analyze_all_chunks_parallel(chunks: list) -> list:
+    client = genai.Client()
+
+    tasks = [analyze_single_chunk_async(client, chunk) for chunk in chunks]
+
+    print(f"[AI] Launching {len(tasks)} parallel analysis tasks...")
+    results = await asyncio.gather(*tasks)
+
+    return results
