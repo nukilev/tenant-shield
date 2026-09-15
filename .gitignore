@@ -1,5 +1,15 @@
-.venv/
-venv/
-__pycache__/
+# סביבה ומשתנים רגישים (חובה!)
 .env
+.venv/
+env/
+venv/
+
+# קבצי Cache והורדות כבדות
+data/chroma_db/
+data/hf_cache/
+__pycache__/
 *.pyc
+
+# קבצי מערכת זמניים
+.DS_Store
+Thumbs.db

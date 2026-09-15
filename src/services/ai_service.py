@@ -3,58 +3,89 @@ from google import genai
 from google.genai import types
 from google.genai.errors import APIError
 from src.models.analysis import ClauseAnalysis
+from src.services.rag_service import LegalRAGService
 
+rag_service = LegalRAGService()
 
-async def analyze_single_chunk_gemini(sem: asyncio.Semaphore, client: genai.Client, chunk_text: str) -> dict:
-    async with sem:
-        system_instruction = (
-            "אתה עורך דין מומחה לדיני שכירות ומקרקעין בישראל. תפקידך לנתח סעיף מחוזה שכירות "
-            "ולהציף סיכונים מהותיים עבור השוכר, תוך השוואה לחוק שכירות הוגנת ולסטנדרט המקובל בשוק."
-        )
+async def analyze_clause_with_rag(client: genai.Client, clause_text: str) -> dict:
+    legal_context = rag_service.search_relevant_laws(clause_text, top_k=2)
 
-        config = types.GenerateContentConfig(
+    system_instruction = (
+        "אתה מומחה משפטי הבודק חוזי שכירות בישראל. תפקידך להגן על השוכר.\n"
+        "עליך לבסס את הניתוח, רמת הסיכון והנימוקים **אך ורק על סעיפי החוק המצורפים תחת 'מקורות חוקיים מחייבים'**.\n\n"
+        "כללי סיווג סיכון:\n"
+        "- red: הסעיף בחוזה סותר הוראת חוק קוגנטית (שלא ניתן להתנות עליה לרעת השוכר, כמו הגבלת ערובות, חובת תיקון ליקויים, או תנאי ביטול חד-צדדיים), או מטיל חיוב בלתי חוקי במפורש.\n"
+        "- yellow: הסעיף מעורפל, גבולי, מאפשר שיקול דעת רחב מדי למשכיר, או דורש הבהרה והגבלה לפי עקרון תום הלב.\n"
+        "- green: הסעיף תקין, הוגן, עומד בדרישות החוק המצורפות, או שאין לגביו הוראה מגבילה במקורות.\n\n"
+        "הנחיות פלט:\n"
+        "החזר אך ורק אובייקט JSON תקין (ללא בלוקי markdown של ```json) במבנה הבא:\n"
+        "{\n"
+        '  "risk": "green" | "yellow" | "red",\n'
+        '  "summary": "סיכום תמציתי של מהות הסעיף במשפט אחד",\n'
+        '  "legal_reasoning": "נימוק משפטי המסתמך מפורשות על לשון החוק שסופקה",\n'
+        '  "recommendation": "המלצה מעשית לשוכר (או תיקון מוצע לניסוח)",\n'
+        '  "cited_laws": "ציטוט קצר או הפניה לסעיף החוק הרלוונטי מתוך המקורות"\n'
+        "}"
+    )
+
+    user_prompt = (
+        f"מקורות חוקיים מחייבים לבדיקה:\n{legal_context}\n\n"
+        f"---\n"
+        f"סעיף מתוך חוזה השכירות לבדיקה:\n{clause_text}"
+    )
+
+    response = await client.aio.models.generate_content(
+        model="gemini-3.6-flash",
+        contents=user_prompt,
+        config=types.GenerateContentConfig(
             system_instruction=system_instruction,
-            response_mime_type="application/json",
-            response_schema=ClauseAnalysis,
-            temperature=0.2,
+            temperature=0.1,
+            response_mime_type="application/json"
         )
+    )
 
+    try:
+        analysis_data = json.loads(response.text)
+    except Exception:
+        analysis_data = {
+            "risk": "yellow",
+            "summary": "סעיף בחוזה",
+            "legal_reasoning": response.text,
+            "recommendation": "מומלץ לבדוק את ניסוח הסעיף.",
+            "cited_laws": "הסתמכות כללית"
+        }
+
+    return {
+        "clause_text": clause_text,
+        "analysis": analysis_data,
+        "retrieved_context": legal_context
+    }
+
+async def analyze_full_contract(client: genai.Client, clauses: list[str], progress_callback=None) -> list[dict]:
+
+    results = []
+    total = len(clauses)
+
+    for i, clause in enumerate(clauses):
         try:
-            response = await client.aio.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=f"נתח בצורה מעמיקה את הסעיף הבא מהחוזה:\n\n{chunk_text}",
-                config=config,
-            )
+            res = await analyze_clause_with_rag(client, clause)
+            results.append(res)
+        except Exception as e:
+            results.append({
+                "clause_text": clause,
+                "analysis": {
+                    "risk": "yellow",
+                    "summary": "שגיאה בניתוח סעיף",
+                    "legal_reasoning": f"לא ניתן היה להשלים את הניתוח: {e}",
+                    "recommendation": "בדוק את הסעיף ידנית.",
+                    "cited_laws": "אין"
+                },
+                "retrieved_context": ""
+            })
 
-            # השהייה קלה של שנייה וחצי מיד אחרי הקריאה כדי לתת למכסה של גוגל להתאושש
-            await asyncio.sleep(1.5)
-            return {"original_text": chunk_text, "analysis": response.text}
+        if progress_callback:
+            progress_callback(i + 1, total)
 
-        except APIError as e:
-            # מנגנון הגנה: אם Pro חסום או עמוס (503/429), עוברים מייד ל-Flash האסינכרוני
-            if e.code in [429, 503]:
-                print(f"  [AI Warning] Gemini Pro rate limit or busy ({e.code}). Switching to Flash for this clause...")
-                await asyncio.sleep(3)  # לוקחים נשימה ארוכה יותר
-                try:
-                    response = await client.aio.models.generate_content(
-                        model='gemini-1.5-flash',
-                        contents=f"נתח בצורה מעמיקה את הסעיף הבא מהחוזה:\n\n{chunk_text}",
-                        config=config,
-                    )
-                    return {"original_text": chunk_text, "analysis": response.text}
-                except Exception as flash_e:
-                    return {"original_text": chunk_text, "error": f"Flash fallback failed: {flash_e}"}
-            else:
-                return {"original_text": chunk_text, "error": str(e)}
+        await asyncio.sleep(0.5)
 
-
-async def analyze_all_chunks_parallel(chunks: list) -> list:
-    client = genai.Client()
-
-    sem = asyncio.Semaphore(2)
-
-    print(f"[Gemini API] Launching {len(chunks)} tasks with controlled concurrency (Max 2 at a time)...")
-    tasks = [analyze_single_chunk_gemini(sem, client, chunk) for chunk in chunks]
-
-    results = await asyncio.gather(*tasks)
     return results

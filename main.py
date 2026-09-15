@@ -1,97 +1,138 @@
-import time
-import json
 import asyncio
-import streamlit as str_ui
+import os
+import streamlit as st
+from google import genai
 from dotenv import load_dotenv
-from src.services.pdf_service import read_pdf_contract
-from src.services.chunking_service import split_contract_into_chunks
-from src.services.ai_service import analyze_all_chunks_parallel
 
-load_dotenv()
+from src.services.ai_service import analyze_clause_with_rag, analyze_full_contract
+from src.services.contract_parser import extract_text_from_file, split_contract_into_clauses
 
-str_ui.set_page_config(page_title="Tenant Shield - מגן השוכר", layout="centered")
+load_dotenv(override=True)
 
-str_ui.markdown(
-    """
-    <style>
-    .stApp { direction: RTL; text-align: right; }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+st.set_page_config(page_title="Tenant Shield - מגן השוכר", layout="wide", page_icon="🛡️")
 
-str_ui.title("🛡️ Tenant Shield - מגן השוכר")
-str_ui.subheader("ניתוח חוזי שכירות מבוסס AI בזמן אמת")
-str_ui.write("העלה את קובץ ה-PDF של חוזה השכירות שלך, והמערכת תציף סיכונים ותציע ניסוחים חלופיים.")
+st.title("🛡️ Tenant Shield - מגן השוכר")
+st.caption("מערכת AI ו-RAG לניתוח ובדיקת חוזי שכירות מול הדין הישראלי")
 
-uploaded_file = str_ui.file_uploader("בחר קובץ חוזה שכירות (PDF)", type=["pdf"])
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    st.error("לא נמצא GEMINI_API_KEY בקובץ ה-.env")
+    st.stop()
 
-if uploaded_file is not None:
-    # שמירה זמנית של הקובץ המועלה כדי שספריית ה-PDF תוכל לקרוא אותו
-    temp_filename = "temp_uploaded_contract.pdf"
-    with open(temp_filename, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+client = genai.Client(api_key=api_key)
 
-    str_ui.success("📊 הקובץ הועלה בהצלחה! מוכן לניתוח.")
+tab_upload, tab_single = st.tabs(["📄 העלאת חוזה מלא (PDF / Word)", "✍️ בדיקת סעיף בודד"])
 
-    # כפתור להרצת הניתוח
-    if str_ui.button("התחל ניתוח חוזה"):
-        with str_ui.spinner("מחלץ טקסט ומנתח סעיפים מול Gemini API..."):
-            try:
-                # א. חילוץ ופיצול
-                full_text = read_pdf_contract(temp_filename)
-                chunks = split_contract_into_chunks(full_text)
+# -------------------------------------------------------------
+# טאב 1: העלאת חוזה מלא
+# -------------------------------------------------------------
+with tab_upload:
+    st.subheader("העלאת קובץ החוזה")
+    uploaded_file = st.file_uploader(
+        "בחר קובץ חוזה שכירות לבדיקה:",
+        type=["pdf", "docx", "txt"],
+        help="תומך ב-PDF סרוק דיגיטלית, מסמכי Word וקבצי טקסט"
+    )
 
-                parallel_results = asyncio.run(analyze_all_chunks_parallel(chunks))
+    if uploaded_file is not None:
+        raw_text = extract_text_from_file(uploaded_file)
+        clauses = split_contract_into_clauses(raw_text)
 
-                str_ui.markdown("---")
+        st.info(f"המסמך נקרא בהצלחה: זוהו **{len(clauses)}** סעיפים ומקטעים לניתוח.")
 
-                for i, result in enumerate(parallel_results, start=1):
-                    if "error" in result:
-                        str_ui.error(f"שגיאה בניתוח סעיף {i}: {result['error']}")
-                        continue
+        if st.button("🚀 נתח את כל סעיפי החוזה", type="primary"):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
 
-                    original_text = result["original_text"]
-                    analysis_json = json.loads(result["analysis"])
 
-                    with str_ui.container():
-                        str_ui.markdown(f"### 📍 סעיף {i}")
+            def update_progress(current, total):
+                progress_bar.progress(current / total)
+                status_text.text(f"מנתח סעיף {current} מתוך {total} מול מאגר החקיקה...")
 
-                        risk = analysis_json.get('risk_level', 'green').lower()
-                        explanation = analysis_json.get('explanation', '')
-                        alternative = analysis_json.get('alternative_text', '')
 
-                        col_original, col_analysis = str_ui.columns([1, 1.2], gap="large")
+            results = asyncio.run(analyze_full_contract(client, clauses, update_progress))
+            status_text.text("✅ הניתוח הושלם בהצלחה!")
 
-                        with col_original:
-                            str_ui.markdown("**📄 מתוך החוזה:**")
-                            str_ui.info(original_text)
+            # סיכום מספרי של הסיכונים
+            reds = [r for r in results if r["analysis"].get("risk") == "red"]
+            yellows = [r for r in results if r["analysis"].get("risk") == "yellow"]
+            greens = [r for r in results if r["analysis"].get("risk") == "green"]
 
-                        with col_analysis:
-                            str_ui.markdown("**🔍 ניתוח משפטי:**")
-                            if risk == 'red':
-                                str_ui.markdown(
-                                    "<span style='color:#ef5350; font-weight:bold; font-size:18px;'>🚨 רמת סיכון: אדום</span>",
-                                    unsafe_allow_html=True)
-                            elif risk == 'yellow':
-                                str_ui.markdown(
-                                    "<span style='color:#ffca28; font-weight:bold; font-size:18px;'>⚠️ רמת סיכון: צהוב</span>",
-                                    unsafe_allow_html=True)
-                            else:
-                                str_ui.markdown(
-                                    "<span style='color:#66bb6a; font-weight:bold; font-size:18px;'>✅ רמת סיכון: ירוק</span>",
-                                    unsafe_allow_html=True)
+            st.divider()
+            st.subheader("📊 תמונת מצב של החוזה")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("🚨 סעיפים בסיכון גבוה (סותרים חוק)", len(reds))
+            m2.metric("⚠️ סעיפים דורשי הבהרה / גבוליים", len(yellows))
+            m3.metric("✅ סעיפים תקינים", len(greens))
 
-                            str_ui.markdown(f"**הסבר:** {explanation}")
+            st.divider()
+            st.subheader("📋 פירוט הניתוח סעיף אחר סעיף")
 
-                            if alternative and risk in ['red', 'yellow']:
-                                str_ui.markdown("**💡 נוסח חלופי מוצע:**")
-                                str_ui.code(alternative, language="text")
+            for idx, res in enumerate(results, start=1):
+                analysis = res["analysis"]
+                risk = analysis.get("risk", "green")
+                summary = analysis.get("summary", "ניתוח סעיף")
 
-                        str_ui.markdown("<hr style='border: 0; height: 1px; background: #e0e0e0; margin: 30px 0;'>",
-                                        unsafe_allow_html=True)
+                if risk == "red":
+                    box_title = f"🚨 סעיף {idx} [סיכון גבוה]: {summary}"
+                elif risk == "yellow":
+                    box_title = f"⚠️ סעיף {idx} [סיכון בינוני]: {summary}"
+                else:
+                    box_title = f"✅ סעיף {idx} [תקין]: {summary}"
 
-                str_ui.balloons()
+                with st.expander(box_title, expanded=(risk == "red")):
+                    st.markdown("**נוסח הסעיף בחוזה:**")
+                    st.code(res["clause_text"], language="text")
 
-            except Exception as e:
-                str_ui.error(f"התרחשה שגיאה במהלך הניתוח: {e}")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**⚖️ נימוק משפטי:**")
+                        st.write(analysis.get("legal_reasoning"))
+                        st.info(f"**מקור חוקי:** {analysis.get('cited_laws')}")
+                    with c2:
+                        st.markdown("**💡 המלצה מעשית לשוכר:**")
+                        st.write(analysis.get("recommendation"))
+
+                    if res.get("retrieved_context"):
+                        with st.expander("🔍 צפה בסעיפי החוק המלאים שנשלפו מ-ChromaDB"):
+                            st.markdown(res["retrieved_context"])
+
+# -------------------------------------------------------------
+# טאב 2: בדיקת סעיף בודד
+# -------------------------------------------------------------
+with tab_single:
+    st.subheader("בדיקת סעיף בודד")
+    contract_text = st.text_area(
+        "הדבק כאן סעיף מתוך החוזה:",
+        height=150,
+        placeholder="לדוגמה: השוכר יישא בעלות תיקון כל קלקול במזגן..."
+    )
+
+    if st.button("בדוק סעיף", type="primary"):
+        if not contract_text.strip():
+            st.warning("אנא הזן טקסט.")
+        else:
+            with st.spinner("שולף סעיפי חוק ומנתח..."):
+                result = asyncio.run(analyze_clause_with_rag(client, contract_text))
+                analysis = result["analysis"]
+                risk = analysis.get("risk", "green")
+
+                if risk == "red":
+                    st.error(f"🚨 **סיכון גבוה**: {analysis.get('summary')}")
+                elif risk == "yellow":
+                    st.warning(f"⚠️ **דורש הבהרה**: {analysis.get('summary')}")
+                else:
+                    st.success(f"✅ **תקין**: {analysis.get('summary')}")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("⚖️ ניתוח משפטי")
+                    st.write(analysis.get("legal_reasoning"))
+                    st.info(f"**סעיף החוק שהופעל:** {analysis.get('cited_laws')}")
+
+                with col2:
+                    st.subheader("💡 המלצה לשוכר")
+                    st.write(analysis.get("recommendation"))
+
+                with st.expander("🔍 צפה בסעיפי החוק המלאים שנשלפו מהמאגר המקומי"):
+                    st.markdown(result["retrieved_context"])
