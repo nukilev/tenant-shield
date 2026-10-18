@@ -3,33 +3,36 @@ import re
 from pypdf import PdfReader
 from docx import Document
 
-def extract_text_from_file(uploaded_file) -> str:
-    filename = uploaded_file.name.lower()
 
-    if filename.endswith(".pdf"):
-        reader = PdfReader(uploaded_file)
-        text = "\n".join([page.extract_text() or "" for page in reader.pages])
-        return text
+def extract_text_from_bytes(file_bytes: bytes, filename: str) -> str:
+    """Extracts raw text from uploaded file bytes (supports PDF, DOCX, and TXT)."""
+    filename_lower = filename.lower()
+    file_stream = io.BytesIO(file_bytes)
 
-    elif filename.endswith(".docx"):
-        doc = Document(io.BytesIO(uploaded_file.read()))
-        text = "\n".join([p.text for p in doc.paragraphs if p.text])
-        return text
+    if filename_lower.endswith(".pdf"):
+        reader = PdfReader(file_stream)
+        return "\n".join([page.extract_text() or "" for page in reader.pages])
 
-    elif filename.endswith(".txt"):
-        return uploaded_file.getvalue().decode("utf-8")
+    elif filename_lower.endswith(".docx"):
+        doc = Document(file_stream)
+        return "\n".join([p.text for p in doc.paragraphs if p.text])
 
-    return ""
+    elif filename_lower.endswith(".txt"):
+        return file_bytes.decode("utf-8", errors="ignore")
+
+    raise ValueError("Unsupported file format. Only PDF, DOCX, and TXT are allowed.")
+
 
 def split_contract_into_clauses(full_text: str) -> list[str]:
     """
-    מפצל את החוזה למקטעים/סעיפים לפי תבניות מספור נפוצות בחוזים בישראל:
-    '1.', 'סעיף 1', '1.1' וכו'.
+    Segments a full Hebrew contract text into individual clauses based on common
+    numbering patterns (e.g., '1.', '1.1', 'סעיף 2').
     """
     lines = full_text.splitlines()
     clauses = []
     current_clause = []
 
+    # Matches standard numbering at the beginning of a line
     clause_start_pattern = re.compile(r"^(?:סעיף\s+)?(\d+(\.\d+)?)\.?\s+")
 
     for line in lines:
@@ -50,6 +53,7 @@ def split_contract_into_clauses(full_text: str) -> list[str]:
         if len(joined) > 30:
             clauses.append(joined)
 
+    # Fallback: split by double newlines if standard numbering was not detected
     if len(clauses) < 3:
         paragraphs = [p.strip() for p in full_text.split("\n\n") if len(p.strip()) > 40]
         return paragraphs if paragraphs else [full_text]
