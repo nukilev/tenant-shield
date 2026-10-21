@@ -3,7 +3,8 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from google import genai
-
+import asyncio
+from src.progress_state import current_progress
 from src.schemas import (
     ClauseAnalysisRequest,
     ClauseAnalysisResponse,
@@ -29,6 +30,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/progress")
+async def get_progress():
+    return current_progress
 
 def get_gemini_client() -> genai.Client:
     api_key = os.getenv("GEMINI_API_KEY")
