@@ -1,4 +1,4 @@
-from typing import Literal, List
+from typing import Literal, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -22,7 +22,15 @@ class LegalAnalysisDetail(BaseModel):
         description="Detailed legal reasoning grounded strictly in the retrieved Israeli statutory sections."
     )
     recommendation: str = Field(
-        description="Actionable advice or suggested rephrasing to protect the tenant."
+        description="Actionable strategic advice explaining what the tenant should negotiate or clarify."
+    )
+    suggested_revision: Optional[str] = Field(
+        default=None,
+        description=(
+            "If risk is 'red' or 'yellow', provide an exact, legally balanced Hebrew revision of the clause "
+            "ready to be inserted into the lease, protecting tenant statutory rights while remaining realistic for a landlord to accept. "
+            "If risk is 'green', return null."
+        )
     )
     cited_laws: str = Field(
         description="Specific statutory references (law name and section number) used for the analysis."

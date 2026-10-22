@@ -1,4 +1,4 @@
-import {useState, useEffect} from "react";
+import { useState, useEffect } from "react";
 import {
     Shield,
     Upload,
@@ -12,14 +12,16 @@ import {
     Loader2,
     ChevronDown,
     ChevronUp,
-    Search
+    Search,
+    Copy,
+    Check
 } from "lucide-react";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 
 export default function App() {
     const [activeTab, setActiveTab] = useState("upload"); // 'upload' | 'single'
-    const [serverStatus, setServerStatus] = useState({online: false, lawsCount: 0});
+    const [serverStatus, setServerStatus] = useState({ online: false, lawsCount: 0 });
 
     // States for full contract analysis & progress bar
     const [selectedFile, setSelectedFile] = useState(null);
@@ -43,10 +45,10 @@ export default function App() {
             .then((res) => res.json())
             .then((data) => {
                 if (data.status === "healthy") {
-                    setServerStatus({online: true, lawsCount: data.indexed_law_clauses});
+                    setServerStatus({ online: true, lawsCount: data.indexed_law_clauses });
                 }
             })
-            .catch(() => setServerStatus({online: false, lawsCount: 0}));
+            .catch(() => setServerStatus({ online: false, lawsCount: 0 }));
     }, []);
 
     // Handle full contract file upload & analysis
@@ -123,8 +125,8 @@ export default function App() {
         try {
             const response = await fetch(`${API_BASE_URL}/analyze-clause`, {
                 method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({clause_text: clauseInput}),
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ clause_text: clauseInput }),
             });
 
             if (!response.ok) {
@@ -154,7 +156,7 @@ export default function App() {
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-sm">
-                            <Shield className="w-6 h-6"/>
+                            <Shield className="w-6 h-6" />
                         </div>
                         <div>
                             <h1 className="text-xl font-bold text-slate-900 tracking-tight">
@@ -197,7 +199,7 @@ export default function App() {
                                 : "text-slate-600 hover:text-slate-900"
                         }`}
                     >
-                        <FileText className="w-4 h-4"/>
+                        <FileText className="w-4 h-4" />
                         ניתוח חוזה מלא (PDF / DOCX)
                     </button>
                     <button
@@ -211,7 +213,7 @@ export default function App() {
                                 : "text-slate-600 hover:text-slate-900"
                         }`}
                     >
-                        <Search className="w-4 h-4"/>
+                        <Search className="w-4 h-4" />
                         בדיקת סעיף בודד
                     </button>
                 </div>
@@ -219,7 +221,7 @@ export default function App() {
                 {/* Error Alert */}
                 {errorMsg && (
                     <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl flex items-center gap-3 text-sm">
-                        <AlertTriangle className="w-5 h-5 shrink-0"/>
+                        <AlertTriangle className="w-5 h-5 shrink-0" />
                         <span>{errorMsg}</span>
                     </div>
                 )}
@@ -229,7 +231,7 @@ export default function App() {
                     <div className="space-y-8">
                         <div className="bg-white border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-indigo-400 transition-colors">
                             <div className="bg-indigo-50 w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-600">
-                                <Upload className="w-7 h-7"/>
+                                <Upload className="w-7 h-7" />
                             </div>
                             <h2 className="text-lg font-bold text-slate-800 mb-1">
                                 העלה קובץ חוזה שכירות לבדיקה אוטומטית
@@ -262,7 +264,7 @@ export default function App() {
                                         {isAnalyzingContract ? (
                                             <div className="flex flex-col items-center gap-1.5 py-1 w-full">
                                                 <div className="flex items-center gap-2 justify-center">
-                                                    <Loader2 className="w-5 h-5 animate-spin"/>
+                                                    <Loader2 className="w-5 h-5 animate-spin" />
                                                     <span className="font-bold text-sm">מעבד חוזה מול מאגר החקיקה...</span>
                                                 </div>
                                                 <span className="text-xs text-indigo-100 font-normal">
@@ -271,7 +273,7 @@ export default function App() {
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-2">
-                                                <Scale className="w-5 h-5"/>
+                                                <Scale className="w-5 h-5" />
                                                 <span>התחל ניתוח משפטי מלא</span>
                                             </div>
                                         )}
@@ -325,7 +327,7 @@ export default function App() {
                                     >
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs font-semibold">סיכון גבוה / סותר חוק</span>
-                                            <XCircle className="w-5 h-5 text-rose-500"/>
+                                            <XCircle className="w-5 h-5 text-rose-500" />
                                         </div>
                                         <p className="text-3xl font-extrabold mt-1">
                                             {contractReport.metrics.red_count}
@@ -342,7 +344,7 @@ export default function App() {
                                     >
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs font-semibold">דורש הבהרה / גבולי</span>
-                                            <AlertTriangle className="w-5 h-5 text-amber-500"/>
+                                            <AlertTriangle className="w-5 h-5 text-amber-500" />
                                         </div>
                                         <p className="text-3xl font-extrabold mt-1">
                                             {contractReport.metrics.yellow_count}
@@ -359,7 +361,7 @@ export default function App() {
                                     >
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs font-semibold">סעיפים תקינים</span>
-                                            <CheckCircle2 className="w-5 h-5 text-emerald-500"/>
+                                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                                         </div>
                                         <p className="text-3xl font-extrabold mt-1">
                                             {contractReport.metrics.green_count}
@@ -370,7 +372,7 @@ export default function App() {
                                 {/* Clause Cards List */}
                                 <div className="space-y-4">
                                     {filteredResults.map((item, idx) => (
-                                        <ClauseAnalysisCard key={idx} index={idx + 1} item={item}/>
+                                        <ClauseAnalysisCard key={idx} index={idx + 1} item={item} />
                                     ))}
                                 </div>
                             </div>
@@ -401,12 +403,12 @@ export default function App() {
                                 >
                                     {isAnalyzingClause ? (
                                         <>
-                                            <Loader2 className="w-4 h-4 animate-spin"/>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
                                             מנתח סעיף...
                                         </>
                                     ) : (
                                         <>
-                                            <Scale className="w-4 h-4"/>
+                                            <Scale className="w-4 h-4" />
                                             נתח סעיף מול החוק
                                         </>
                                     )}
@@ -414,7 +416,7 @@ export default function App() {
                             </div>
                         </div>
 
-                        {singleResult && <ClauseAnalysisCard index={1} item={singleResult} defaultOpen/>}
+                        {singleResult && <ClauseAnalysisCard index={1} item={singleResult} defaultOpen />}
                     </div>
                 )}
             </main>
@@ -423,14 +425,15 @@ export default function App() {
 }
 
 /* Reusable Component for displaying a single analyzed clause */
-function ClauseAnalysisCard({index, item}) {
+function ClauseAnalysisCard({ index, item }) {
     const [showRawLaw, setShowRawLaw] = useState(false);
-    const {analysis, clause_text, retrieved_context} = item;
+    const [isCopied, setIsCopied] = useState(false);
+    const { analysis, clause_text, retrieved_context } = item;
     const risk = analysis.risk;
 
     const badgeStyles = {
         red: {
-            bg: "bg-rose-50 border-rose-200",
+            bg: "bg-rose-50/70 border-rose-200",
             badge: "bg-rose-100 text-rose-700",
             label: "סיכון גבוה / סותר חוק",
             icon: <XCircle className="w-5 h-5 text-rose-600 shrink-0" />,
@@ -452,6 +455,13 @@ function ClauseAnalysisCard({index, item}) {
         badge: "bg-slate-100 text-slate-700",
         label: "נבדק",
         icon: null,
+    };
+
+    const handleCopyRevision = () => {
+        if (!analysis.suggested_revision) return;
+        navigator.clipboard.writeText(analysis.suggested_revision);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
     };
 
     return (
@@ -485,7 +495,7 @@ function ClauseAnalysisCard({index, item}) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div className="bg-white/90 border border-slate-200/80 rounded-xl p-4">
                     <div className="flex items-center gap-2 font-bold text-slate-800 mb-1.5">
-                        <Scale className="w-4 h-4 text-indigo-600"/>
+                        <Scale className="w-4 h-4 text-indigo-600" />
                         נימוק משפטי
                     </div>
                     <p className="text-slate-600 leading-relaxed text-xs">{analysis.legal_reasoning}</p>
@@ -493,12 +503,47 @@ function ClauseAnalysisCard({index, item}) {
 
                 <div className="bg-white/90 border border-slate-200/80 rounded-xl p-4">
                     <div className="flex items-center gap-2 font-bold text-slate-800 mb-1.5">
-                        <Lightbulb className="w-4 h-4 text-amber-500"/>
+                        <Lightbulb className="w-4 h-4 text-amber-500" />
                         המלצה מעשית לשוכר
                     </div>
                     <p className="text-slate-600 leading-relaxed text-xs">{analysis.recommendation}</p>
                 </div>
             </div>
+
+            {/* Suggested Revision Box (Rendered only if provided) */}
+            {analysis.suggested_revision && (
+                <div className="mt-4 p-4 bg-indigo-50/80 border border-indigo-200 rounded-xl text-right">
+                    <div className="flex justify-between items-center mb-2">
+                        <button
+                            type="button"
+                            onClick={handleCopyRevision}
+                            className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                                isCopied
+                                    ? "bg-emerald-600 text-white border-emerald-600"
+                                    : "bg-white hover:bg-indigo-50 text-indigo-700 border-indigo-200 hover:border-indigo-300"
+                            }`}
+                        >
+                            {isCopied ? (
+                                <>
+                                    <Check className="w-3.5 h-3.5 text-white" />
+                                    <span>הועתק ללוח!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span>העתק נוסח</span>
+                                </>
+                            )}
+                        </button>
+                        <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                            ✍️ הצעה לנוסח מתוקן לחתימה:
+                        </span>
+                    </div>
+                    <p className="text-xs text-slate-800 leading-relaxed font-sans bg-white p-3 rounded-lg border border-indigo-100/80 shadow-2xs">
+                        "{analysis.suggested_revision}"
+                    </p>
+                </div>
+            )}
 
             {/* Expandable RAG Grounding Context */}
             {retrieved_context && (
@@ -507,9 +552,9 @@ function ClauseAnalysisCard({index, item}) {
                         onClick={() => setShowRawLaw(!showRawLaw)}
                         className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
                     >
-                        <BookOpen className="w-3.5 h-3.5"/>
+                        <BookOpen className="w-3.5 h-3.5" />
                         <span>צפה בלשון החוק המקורית שנשלפה מ-ChromaDB (RAG Context)</span>
-                        {showRawLaw ? <ChevronUp className="w-3.5 h-3.5"/> : <ChevronDown className="w-3.5 h-3.5"/>}
+                        {showRawLaw ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </button>
 
                     {showRawLaw && (

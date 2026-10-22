@@ -23,39 +23,65 @@ def extract_text_from_bytes(file_bytes: bytes, filename: str) -> str:
     raise ValueError("Unsupported file format. Only PDF, DOCX, and TXT are allowed.")
 
 
+import re
+
+
 def split_contract_into_clauses(full_text: str) -> list[str]:
     """
-    Segments a full Hebrew contract text into individual clauses based on common
-    numbering patterns (e.g., '1.', '1.1', 'סעיף 2').
+    Segments raw contract text into coherent, legally meaningful clauses.
+    Handles inline clause numbering, messy PDF line breaks, and Hebrew RTL artifacts.
     """
-    lines = full_text.splitlines()
+    if not full_text or not full_text.strip():
+        return []
+
+    cleaned_text = re.sub(r"[ \t]+", " ", full_text)
+    cleaned_text = re.sub(r"\n\s*\n+", "\n\n", cleaned_text)
+
+    clause_boundary_pattern = re.compile(
+        r"(?:\n|\.\s+|;\s+|^)"  
+        r"("
+        r"(?:(?:סעיף|פרק)\s+)?\d{1,2}(?:\.\d{1,2})?\s*[\.\-\)]\s+"  
+        r"|"
+        r"(?:(?:סעיף|פרק)\s+)?[א-ת]['״]?\s*[\.\-\)]\s+"  
+        r")"
+    )
+
+    normalized_text = clause_boundary_pattern.sub(r"\n\n__CLAUSE_START__ \1", cleaned_text)
+
+    raw_clauses = normalized_text.split("__CLAUSE_START__")
     clauses = []
-    current_clause = []
+    current_clause = ""
 
-    # Matches standard numbering at the beginning of a line
-    clause_start_pattern = re.compile(r"^(?:סעיף\s+)?(\d+(\.\d+)?)\.?\s+")
-
-    for line in lines:
-        cleaned_line = line.strip()
-        if not cleaned_line:
+    for chunk in raw_clauses:
+        chunk = chunk.strip()
+        if not chunk:
             continue
 
-        if clause_start_pattern.match(cleaned_line) and current_clause:
-            joined = " ".join(current_clause).strip()
-            if len(joined) > 30:
-                clauses.append(joined)
-            current_clause = [cleaned_line]
+        single_line_chunk = " ".join(chunk.splitlines()).strip()
+
+        if len(single_line_chunk) < 60:
+            current_clause = (current_clause + " " + single_line_chunk).strip()
+            continue
+
+        if current_clause:
+            full_clause = f"{current_clause} {single_line_chunk}".strip()
+            clauses.append(full_clause)
+            current_clause = ""
         else:
-            current_clause.append(cleaned_line)
+            clauses.append(single_line_chunk)
 
     if current_clause:
-        joined = " ".join(current_clause).strip()
-        if len(joined) > 30:
-            clauses.append(joined)
+        if clauses:
+            clauses[-1] = f"{clauses[-1]} {current_clause}".strip()
+        else:
+            clauses.append(current_clause)
 
-    # Fallback: split by double newlines if standard numbering was not detected
-    if len(clauses) < 3:
-        paragraphs = [p.strip() for p in full_text.split("\n\n") if len(p.strip()) > 40]
-        return paragraphs if paragraphs else [full_text]
+    if len(clauses) < 2:
+        paragraphs = [
+            " ".join(p.splitlines()).strip()
+            for p in full_text.split("\n\n")
+            if len(p.strip()) > 50
+        ]
+        return paragraphs if paragraphs else [full_text.strip()]
 
     return clauses
