@@ -37,7 +37,7 @@ def startup_event():
     if not os.path.exists(chroma_path) or not os.listdir(chroma_path):
         print("ChromaDB not detected. Running initial ingestion...")
         from scripts.ingest_laws import run_ingestion
-        ingest_legal_corpus()
+        run_ingestion()
         print("Ingestion complete.")
 
 if __name__ == "__main__":
