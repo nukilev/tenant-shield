@@ -31,6 +31,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+def startup_event():
+    chroma_path = os.getenv("CHROMA_DB_PATH", "chroma_db")
+    if not os.path.exists(chroma_path) or not os.listdir(chroma_path):
+        print("ChromaDB not detected. Running initial ingestion...")
+        from scripts.ingest_laws import run_ingestion
+        ingest_legal_corpus()
+        print("Ingestion complete.")
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("src.api:app", host="0.0.0.0", port=port)
 
 @app.get("/api/progress")
 async def get_progress():
