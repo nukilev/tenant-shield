@@ -1,26 +1,25 @@
 import os
-
-
-HF_LOCAL_CACHE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "hf_cache"))
-os.makedirs(HF_LOCAL_CACHE, exist_ok=True)
-os.environ["HF_HOME"] = HF_LOCAL_CACHE
-
 import chromadb
-from sentence_transformers import SentenceTransformer
+from google import genai
 
 CHROMA_PERSIST_DIRECTORY = "data/chroma_db"
 COLLECTION_NAME = "israeli_contract_laws"
+EMBEDDING_MODEL_NAME = "gemini-embedding-001"
 
 
 class LegalRAGService:
     def __init__(self):
-        print("טוען מודל Embeddings מקומי...")
-        # ציון מפורש של תיקיית השמירה
-        self.embed_model = SentenceTransformer(
-            "paraphrase-multilingual-MiniLM-L12-v2",
-            cache_folder=HF_LOCAL_CACHE
-        )
+        print("Initializing Legal RAG Service with Google Embeddings API...")
 
+        # Use dedicated free key if available, otherwise fallback to main GEMINI_API_KEY
+        api_key = os.getenv("GEMINI_FREE_KEY") or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("Neither GEMINI_API_KEY nor GEMINI_FREE_KEY is set in environment.")
+
+        self.ai_client = genai.Client(
+            api_key=api_key,
+            http_options={'api_version': 'v1'}
+        )
         self.chroma_client = chromadb.PersistentClient(path=CHROMA_PERSIST_DIRECTORY)
         self.collection = self.chroma_client.get_or_create_collection(
             name=COLLECTION_NAME,
@@ -28,12 +27,21 @@ class LegalRAGService:
         )
 
     def generate_embeddings(self, texts: list[str]) -> list[list[float]]:
-        """מייצר וקטורים מקומית על המחשב ללא פנייה לאינטרנט"""
-        embeddings = self.embed_model.encode(texts, show_progress_bar=False)
-        return embeddings.tolist()
+        """Generates embeddings using Google's API efficiently and quickly."""
+        if not texts:
+            return []
+
+        embeddings = []
+        for text in texts:
+            response = self.ai_client.models.embed_content(
+                model=EMBEDDING_MODEL_NAME,
+                contents=text,
+            )
+            embeddings.append(response.embeddings[0].values)
+        return embeddings
 
     def upsert_clauses(self, clauses: list[dict], law_name: str):
-        """הכנסת סעיפים למאגר הווקטורי המקומי"""
+        """Inserts or updates legal clauses in the local vector collection."""
         if not clauses:
             return
 
@@ -51,10 +59,10 @@ class LegalRAGService:
         )
 
     def search_relevant_laws(self, query_text: str, top_k: int = 3) -> str:
-        """חיפוש סמנטי מקומי ומהיר"""
+        """Fast semantic retrieval against ChromaDB."""
         total_docs = self.collection.count()
         if total_docs == 0:
-            return "מאגר החקיקה ריק. יש להריץ אינדוקס ראשוני."
+            return "Legal database is empty. Initial ingestion required."
 
         query_vector = self.generate_embeddings([query_text])[0]
         results = self.collection.query(
