@@ -40,7 +40,7 @@ export default function App() {
 
     // Check backend health on mount
     useEffect(() => {
-        fetch(`${API_BASE_URL}/health`)
+        fetch(`${API_BASE_URL}/api/health`)
             .then((res) => res.json())
             .then((data) => {
                 if (data.status === "healthy") {
