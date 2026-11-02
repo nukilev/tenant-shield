@@ -56,6 +56,7 @@ def get_gemini_client() -> genai.Client:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY is missing in .env file")
     return genai.Client(api_key=api_key)
 
+@app.get("/health", tags=["System"])
 @app.get("/api/health", tags=["System"])
 async def health_check():
     """Returns server status and the total number of indexed statutory clauses in ChromaDB."""
