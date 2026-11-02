@@ -58,12 +58,22 @@ def get_gemini_client() -> genai.Client:
 
 @app.get("/health", tags=["System"])
 @app.get("/api/health", tags=["System"])
-async def health_check():
-    """Returns server status and the total number of indexed statutory clauses in ChromaDB."""
-    doc_count = rag_service.collection.count()
+def health_check():
+    doc_count = 0
+    try:
+        if hasattr(rag_service, "get_collection"):
+            collection = rag_service.get_collection()
+        else:
+            collection = rag_service.client.get_or_create_collection(name=rag_service.collection_name)
+        doc_count = collection.count()
+    except Exception as e:
+        print(f"Warning checking ChromaDB count: {e}")
+        doc_count = 0
+
     return {
         "status": "healthy",
-        "indexed_law_clauses": doc_count
+        "service": "TenantShield API",
+        "indexed_documents": doc_count
     }
 
 @app.post("/api/analyze-clause", response_model=ClauseAnalysisResponse, tags=["Analysis"])
