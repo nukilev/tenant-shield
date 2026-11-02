@@ -1,7 +1,9 @@
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
 import os
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 from google import genai
 import asyncio
 from src.progress_state import current_progress
