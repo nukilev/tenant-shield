@@ -1,8 +1,11 @@
 import os
 import chromadb
 from google import genai
+from pathlib import Path
 
-CHROMA_PERSIST_DIRECTORY = "data/chroma_db"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+CHROMA_PERSIST_DIRECTORY = str(BASE_DIR / "data" / "chroma_db")
+
 COLLECTION_NAME = "israeli_contract_laws"
 EMBEDDING_MODEL_NAME = "gemini-embedding-001"
 

@@ -1,8 +1,9 @@
 # סביבה ומשתנים רגישים (חובה!)
-.env
+.idea/
 .venv/
-env/
-venv/
+.venv1/
+.env
+
 
 # קבצי Cache והורדות כבדות
 data/chroma_db/
@@ -13,3 +14,4 @@ __pycache__/
 # קבצי מערכת זמניים
 .DS_Store
 Thumbs.db
+temp_*.pdf

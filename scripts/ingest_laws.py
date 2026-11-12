@@ -4,8 +4,10 @@ import sys
 import time
 from dotenv import load_dotenv
 load_dotenv()
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(BASE_DIR)
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(str(BASE_DIR))
 
 from src.services.rag_service import LegalRAGService
 
