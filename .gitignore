@@ -1,17 +1,15 @@
-# סביבה ומשתנים רגישים (חובה!)
 .idea/
 .venv/
 .venv1/
 .env
 
 
-# קבצי Cache והורדות כבדות
 data/chroma_db/
 data/hf_cache/
 __pycache__/
 *.pyc
 
-# קבצי מערכת זמניים
+
 .DS_Store
 Thumbs.db
 temp_*.pdf
