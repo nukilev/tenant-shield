@@ -5,9 +5,9 @@ from pydantic import BaseModel
 from google import genai
 from google.genai import types
 from google.genai.errors import APIError
-from src.progress_state import update_progress
+from src.services.progress_state import update_progress
 from src.services.prompts import SINGLE_CLAUSE_SYSTEM_INSTRUCTION, BATCH_SYSTEM_INSTRUCTION
-from src.schemas import LegalAnalysisDetail, BatchClauseAnalysis
+from src.models.schemas import LegalAnalysisDetail, BatchClauseAnalysis
 from src.services.rag_service import LegalRAGService
 
 rag_service = LegalRAGService()

@@ -6,18 +6,18 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 import asyncio
-from src.progress_state import current_progress
-from src.schemas import (
+import uvicorn
+from src.services.progress_state import current_progress
+from src.models.schemas import (
     ClauseAnalysisRequest,
     ClauseAnalysisResponse,
     FullContractAnalysisResponse,
     ContractSummaryMetrics
 )
 
+from src.services.rag_service import CHROMA_PERSIST_DIRECTORY
 from src.services.ai_service import analyze_clause_with_rag, analyze_full_contract, rag_service
 from src.services.contract_parser import extract_text_from_bytes, split_contract_into_clauses
-
-load_dotenv(override=True)
 
 app = FastAPI(
     title="Tenant Shield API 🛡️",
@@ -35,20 +35,20 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_event():
-    chroma_path = os.getenv("CHROMA_DB_PATH", "chroma_db")
+    chroma_path = os.getenv("CHROMA_DB_PATH", CHROMA_PERSIST_DIRECTORY)
     if not os.path.exists(chroma_path) or not os.listdir(chroma_path):
         print("ChromaDB not detected. Running initial ingestion...")
         from scripts.ingest_laws import run_ingestion
         run_ingestion()
         print("Ingestion complete.")
 
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("src.api:app", host="0.0.0.0", port=port)
-
 @app.get("/api/progress")
 async def get_progress():
     return current_progress
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("src.api:app", host="0.0.0.0", port=port)
 
 def get_gemini_client() -> genai.Client:
     api_key = os.getenv("GEMINI_API_KEY")
@@ -64,7 +64,7 @@ def health_check():
         if hasattr(rag_service, "get_collection"):
             collection = rag_service.get_collection()
         else:
-            collection = rag_service.client.get_or_create_collection(name=rag_service.collection_name)
+            collection = rag_service.collection
         doc_count = collection.count()
     except Exception as e:
         print(f"Warning checking ChromaDB count: {e}")
